@@ -73,8 +73,10 @@ stuck update, not a compromised install.
 Mirrors are community-run and go down without warning, so the list is
 user-selectable, persisted, and falls back through the remaining presets when
 one fails. A custom prefix can be typed in for domains that are not built in.
-Installing requires the "unknown sources" permission, which is only requested
-once an APK is actually waiting to be installed.
+Download progress is mirrored into a notification so it survives leaving the
+app, and installing requires the "unknown sources" permission, which is only
+requested once an APK is actually waiting to be installed. The notification
+permission is only asked for, never required.
 ## Layout
 
 ```
