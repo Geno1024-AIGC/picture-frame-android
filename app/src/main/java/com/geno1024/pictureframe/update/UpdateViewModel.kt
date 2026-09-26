@@ -7,7 +7,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.geno1024.pictureframe.BuildConfig
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -54,7 +53,30 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
 
     private val notifier by lazy { UpdateNotifier(getApplication()) }
 
-    val currentRun: Int get() = BuildConfig.CANARY_RUN_NUMBER
+    /**
+     * The installed package's own versionCode, which CI sets to the workflow run
+     * number.
+     *
+     * Read from the package manager rather than a BuildConfig constant so the
+     * comparison cannot be wrong: whatever versionCode is actually installed is
+     * what gets compared, and there is no second copy of it to drift.
+     */
+    val currentRun: Int by lazy { installedVersionCode() }
+
+    /**
+     * The deprecated accessor is kept deliberately: minSdk is 24, so the
+     * alternative is branching on both API 28 and API 33 to reach
+     * PackageInfoFlags and longVersionCode, and both deprecated forms are
+     * still supported at compileSdk 37. One path that works beats a version
+     * matrix that can drift.
+     */
+    @Suppress("DEPRECATION")
+    private fun installedVersionCode(): Int {
+        val context = getApplication<Application>()
+        return context.packageManager
+            .getPackageInfo(context.packageName, 0)
+            .versionCode
+    }
 
     val hasUpdate: Boolean get() = (info?.runNumber ?: 0) > currentRun
 

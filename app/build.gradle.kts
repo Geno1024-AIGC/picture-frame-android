@@ -3,12 +3,20 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-val appVersionName = "1.0"
-
-// CI passes -PcanaryRunNumber=<run_number> so the app can tell whether the
-// published canary is newer than itself. Local builds fall back to 0, which
-// compares as "older than everything" and simply offers an update.
-val canaryRunNumber = (project.findProperty("canaryRunNumber") as String?)?.toIntOrNull() ?: 0
+// CI passes -PcanaryRunNumber=<run_number> and -PcanaryCommit=<sha>.
+//
+// versionCode is the run number so the platform itself orders canaries and the
+// updater can compare against the installed package rather than a constant
+// baked into the APK. versionName pairs it with the short commit so a build is
+// identifiable by eye, e.g. "128-a1b2c3d4".
+//
+// A local build defaults to 1, which AGP requires to be positive, and so always
+// looks older than a canary. It also cannot be installed over a canary because
+// Android refuses a downgrade: either uninstall the canary first, or build with
+// -PcanaryRunNumber=999999 to sit above whatever CI has reached.
+val canaryRunNumber = (project.findProperty("canaryRunNumber") as String?)?.toIntOrNull() ?: 1
+val canaryCommit = ((project.findProperty("canaryCommit") as String?) ?: "local").take(8)
+val appVersionName = "$canaryRunNumber-$canaryCommit"
 
 android {
     namespace = "com.geno1024.pictureframe"
@@ -18,9 +26,8 @@ android {
         applicationId = "com.geno1024.pictureframe"
         minSdk = 24
         targetSdk = 37
-        versionCode = 1
+        versionCode = canaryRunNumber
         versionName = appVersionName
-        buildConfigField("int", "CANARY_RUN_NUMBER", "$canaryRunNumber")
     }
 
     buildTypes {
@@ -45,7 +52,6 @@ android {
 
     buildFeatures {
         compose = true
-        buildConfig = true
     }
 
     packaging {
