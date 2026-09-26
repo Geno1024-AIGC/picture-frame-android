@@ -47,6 +47,31 @@ Gradle KTS, Kotlin, Jetpack Compose, AGP 9.4, JDK 25.
 36. GitHub Actions runs the same three tasks on every push and uploads the debug
 APK as an artifact.
 
+## Canary updates
+
+The `Build` workflow publishes every master build to a rolling pre-release under
+the fixed `canary` tag. The app can update itself from that tag, which is useful
+when GitHub is slow or blocked: the update button in the top bar checks for a
+newer build and, if there is one, downloads the APK through a mirror and hands
+it to the system installer.
+
+Because `versionName` is static across canaries, freshness is decided by the
+workflow run number. CI passes `-PcanaryRunNumber` into the build so the APK
+knows what it is, and publishes a `canary.properties` manifest next to the APK
+carrying the run number, the size and the sha256.
+
+The manifest is always fetched from GitHub directly and is only a few hundred
+bytes, so a slow link still works. Only the APK goes through a mirror, and its
+digest is checked against the value that came from the direct fetch. A mirror
+that serves a modified APK is therefore rejected rather than installed. Android
+separately refuses to install an update signed with a different key.
+
+Mirrors are community-run and go down without warning, so the list is
+user-selectable, persisted, and falls back through the remaining presets when
+one fails. A custom prefix can be typed in for domains that are not built in.
+Installing requires the "unknown sources" permission, which is only requested
+once an APK is actually waiting to be installed.
+
 ## Layout
 
 ```
@@ -60,5 +85,6 @@ app/src/main/java/com/geno1024/pictureframe/
 │   ├── Blur.kt               box blur for the blurred background
 │   └── FrameExporter.kt      renders the state to a full-size Bitmap
 ├── io/                       photo loading and gallery saving
+├── update/                   canary manifest, mirrors, download, install
 └── ui/                       screen, panels, shared controls
 ```
