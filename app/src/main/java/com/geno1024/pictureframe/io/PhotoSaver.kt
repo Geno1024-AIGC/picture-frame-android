@@ -71,13 +71,13 @@ private fun saveViaLegacyFile(
     if (!album.exists() && !album.mkdirs()) return null
     val file = File(album, displayName)
     FileOutputStream(file).use { write(bitmap, format, it) }
-    var scanned: Uri? = null
     MediaScannerConnection.scanFile(
         context,
         arrayOf(file.absolutePath),
         arrayOf(format.mime),
-    ) { _, uri -> scanned = uri }
-    return scanned ?: Uri.fromFile(file)
+        null,
+    )
+    return Uri.fromFile(file)
 }
 
 private fun write(bitmap: Bitmap, format: ExportFormat, out: OutputStream) {
