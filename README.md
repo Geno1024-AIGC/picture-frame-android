@@ -60,18 +60,21 @@ workflow run number. CI passes `-PcanaryRunNumber` into the build so the APK
 knows what it is, and publishes a `canary.properties` manifest next to the APK
 carrying the run number, the size and the sha256.
 
-The manifest is always fetched from GitHub directly and is only a few hundred
-bytes, so a slow link still works. Only the APK goes through a mirror, and its
-digest is checked against the value that came from the direct fetch. A mirror
-that serves a modified APK is therefore rejected rather than installed. Android
-separately refuses to install an update signed with a different key.
+The manifest is fetched from GitHub directly first, and is only a few hundred
+bytes so a slow link can still afford it. The mirrors act as a fallback for it
+too. Only the APK digest is checked against the manifest, which catches
+corruption, truncated files and a mirror serving a stale build. If the manifest
+itself came from a mirror, that mirror also chose the expected digest, so at
+that point the digest is no longer a defence against a hostile mirror — what
+actually prevents one from installing its own APK is that Android refuses an
+update signed with a different key. The realistic worst case is a failed or
+stuck update, not a compromised install.
 
 Mirrors are community-run and go down without warning, so the list is
 user-selectable, persisted, and falls back through the remaining presets when
 one fails. A custom prefix can be typed in for domains that are not built in.
 Installing requires the "unknown sources" permission, which is only requested
 once an APK is actually waiting to be installed.
-
 ## Layout
 
 ```
