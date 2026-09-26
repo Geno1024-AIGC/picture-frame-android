@@ -7,6 +7,7 @@ import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -151,11 +152,12 @@ private fun DrawScope.drawPhoto(photo: ImageBitmap, stage: Stage) {
     val target = stage.photo
     val path = Path().apply { addRoundRect(RoundRect(target)) }
     clipPath(path) {
+        val place = Layout.placeImage(photo.width, photo.height, target)
         withTransform({
-            translate(target.left, target.top)
-            scale(target.width / photo.width, target.height / photo.height)
+            scale(place.scaleX, place.scaleY, pivot = Offset.Zero)
+            translate(place.translateX, place.translateY)
         }) {
-            drawImage(photo)
+            drawImage(photo, filterQuality = FilterQuality.High)
         }
     }
 }
@@ -203,9 +205,9 @@ internal fun DrawScope.drawImageCover(image: ImageBitmap, size: Size) {
     val dw = image.width * scale
     val dh = image.height * scale
     withTransform({
+        scale(scale, scale, pivot = Offset.Zero)
         translate((size.width - dw) / 2f, (size.height - dh) / 2f)
-        scale(scale, scale)
     }) {
-        drawImage(image)
+        drawImage(image, filterQuality = FilterQuality.High)
     }
 }

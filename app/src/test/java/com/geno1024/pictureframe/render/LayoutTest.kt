@@ -130,6 +130,37 @@ class LayoutTest {
     }
 
     @Test
+    fun placedImageCoversTheTargetRectExactly() {
+        val base = EditorState()
+        val states = listOf(base) + FrameStyle.entries.map { style ->
+            base.copy(frame = base.frame.copy(style = style, width = 0.06f, matWidth = 0.04f), margin = 0.1f)
+        }
+        for (state in states) {
+            val stage = Layout.stage(state, Size(1080f, 1080f), photoAspect)
+            val place = Layout.placeImage(3000, 2000, stage.photo)
+            assertEquals("left", stage.photo.left, place.mapX(0f), 0.001f)
+            assertEquals("top", stage.photo.top, place.mapY(0f), 0.001f)
+            assertEquals("right", stage.photo.right, place.mapX(3000f), 0.001f)
+            assertEquals("bottom", stage.photo.bottom, place.mapY(2000f), 0.001f)
+        }
+    }
+
+    @Test
+    fun placedImageIsIndependentOfTheCanvasSize() {
+        val state = EditorState(
+            frame = EditorState().frame.copy(style = FrameStyle.Bevel, width = 0.05f, matWidth = 0.03f),
+            margin = 0.08f,
+        )
+        val small = Layout.stage(state, Size(400f, 400f), photoAspect)
+        val large = Layout.stage(state, Size(4000f, 4000f), photoAspect)
+        val a = Layout.placeImage(2000, 1500, small.photo)
+        val b = Layout.placeImage(2000, 1500, large.photo)
+        assertEquals(a.mapX(0f) * 10f, b.mapX(0f), 0.01f)
+        assertEquals(a.mapX(2000f) * 10f, b.mapX(2000f), 0.01f)
+        assertEquals(a.mapY(0f) * 10f, b.mapY(0f), 0.01f)
+    }
+
+    @Test
     fun containFitsWithinTheBox() {
         val (w, h) = Layout.contain(aspect = 2f, maxWidth = 100f, maxHeight = 100f)
         assertEquals(100f, w, 0.001f)

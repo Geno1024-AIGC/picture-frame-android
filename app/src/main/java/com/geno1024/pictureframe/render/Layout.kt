@@ -24,6 +24,16 @@ data class Stage(
     val frameStroke: Float get() = (frame.width - mat.width) / 2f
 }
 
+data class ImagePlacement(
+    val scaleX: Float,
+    val scaleY: Float,
+    val translateX: Float,
+    val translateY: Float,
+) {
+    fun mapX(x: Float): Float = x * scaleX + translateX
+    fun mapY(y: Float): Float = y * scaleY + translateY
+}
+
 object Layout {
 
     fun canvasSize(state: EditorState, photoAspect: Float, photoLongEdge: Int): Size {
@@ -82,6 +92,16 @@ object Layout {
         )
         val frame = mat.inflate(frameW)
         return Stage(size = size, unit = unit, photo = photo, mat = mat, frame = frame)
+    }
+
+    fun placeImage(imageWidth: Int, imageHeight: Int, target: Rect): ImagePlacement {
+        require(imageWidth > 0 && imageHeight > 0) { "image must have a positive size" }
+        return ImagePlacement(
+            scaleX = target.width / imageWidth,
+            scaleY = target.height / imageHeight,
+            translateX = target.left,
+            translateY = target.top,
+        )
     }
 
     fun contain(aspect: Float, maxWidth: Float, maxHeight: Float): Pair<Float, Float> =
