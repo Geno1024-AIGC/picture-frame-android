@@ -3,6 +3,8 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+val appVersionName = "1.0"
+
 android {
     namespace = "com.geno1024.pictureframe"
     compileSdk = 37
@@ -12,7 +14,7 @@ android {
         minSdk = 24
         targetSdk = 37
         versionCode = 1
-        versionName = "1.0"
+        versionName = appVersionName
     }
 
     buildTypes {
@@ -65,4 +67,9 @@ dependencies {
     debugImplementation(libs.compose.ui.tooling)
 
     testImplementation(libs.junit)
+}
+
+tasks.register("printVersionName") {
+    val version = appVersionName
+    doLast { println(version) }
 }
