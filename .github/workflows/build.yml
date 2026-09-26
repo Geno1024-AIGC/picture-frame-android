@@ -40,7 +40,7 @@ jobs:
         run: ./gradlew lintDebug
 
       - name: Assemble debug APK
-        run: ./gradlew assembleDebug
+        run: ./gradlew assembleDebug -PcanaryRunNumber=${{ github.run_number }}
 
       - name: Read version name
         id: version
@@ -61,6 +61,10 @@ jobs:
       contents: write
 
     steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
       - uses: actions/download-artifact@v8
         with:
           name: app-debug
@@ -77,15 +81,31 @@ jobs:
         run: |
           set -euo pipefail
           short_sha="${FULL_SHA:0:8}"
-          notes="$(printf 'Build #%s, commit `%s`.\n\nDebug APK, not for distribution.' \
-            "$RUN_NUMBER" "$short_sha")"
+          apk=apk/app-debug.apk
+          subject="$(git log -1 --pretty=%s)"
+          notes="$(printf 'Build #%s, commit `%s`.\n\n%s\n\nDebug APK, not for distribution.' \
+            "$RUN_NUMBER" "$short_sha" "$subject")"
           title="$VERSION canary #$RUN_NUMBER"
 
+          # The in-app updater reads this manifest to learn the run number and the
+          # expected digest. It is tiny, so the app always fetches it from GitHub
+          # directly and only proxies the APK itself.
+          size="$(stat -c%s "$apk")"
+          digest="$(sha256sum "$apk" | cut -d' ' -f1)"
+          printf '%s\n' \
+            'runNumber='"$RUN_NUMBER" \
+            'versionName='"$VERSION" \
+            'sizeBytes='"$size" \
+            'sha256='"$digest" \
+            'assetName=app-debug.apk' \
+            'commit='"$FULL_SHA" \
+            > apk/canary.properties
+
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" apk/app-debug.apk --clobber
+            gh release upload "$TAG" "$apk" apk/canary.properties --clobber
             gh release edit "$TAG" --title "$title" --notes "$notes" --prerelease
           else
-            gh release create "$TAG" apk/app-debug.apk \
+            gh release create "$TAG" "$apk" apk/canary.properties \
               --title "$title" \
               --notes "$notes" \
               --prerelease \
