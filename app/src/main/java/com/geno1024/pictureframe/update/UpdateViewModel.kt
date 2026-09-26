@@ -52,6 +52,8 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
     /** A downloaded APK waiting on the install permission. */
     private var pending: File? = null
 
+    private val notifier by lazy { UpdateNotifier(getApplication()) }
+
     val currentRun: Int get() = BuildConfig.CANARY_RUN_NUMBER
 
     val hasUpdate: Boolean get() = (info?.runNumber ?: 0) > currentRun
@@ -113,36 +115,49 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
             }.distinctBy { it.prefix }
             var failure: String? = null
             var lastReported = -1
-            for (mirror in candidates) {
-                val result = Updater.download(target, mirror, cache) { fraction ->
-                    // Throttle: a 12 MB APK arrives in ~190 chunks, and writing
-                    // state that often would recompose the dialog just as often.
-                    val step = (fraction * 200).toInt()
-                    if (step != lastReported) {
-                        lastReported = step
-                        progress = fraction
+            try {
+                for (mirror in candidates) {
+                    val result = Updater.download(target, mirror, cache) { fraction ->
+                        // Throttle: a 12 MB APK arrives in ~190 chunks, and writing
+                        // state that often would recompose the dialog just as often.
+                        val step = (fraction * 200).toInt()
+                        if (step != lastReported) {
+                            lastReported = step
+                            progress = fraction
+                            val percent = (fraction * 100).toInt()
+                            if (notifier.shouldPost(percent)) {
+                                notifier.downloading(target.runNumber, percent)
+                            }
+                        }
                     }
-                }
-                when (result) {
-                    is DownloadResult.Success -> {
-                        progress = 1f
-                        downloading = false
-                        promptInstall(result.file)
-                        return@launch
-                    }
+                    when (result) {
+                        is DownloadResult.Success -> {
+                            progress = 1f
+                            downloading = false
+                            promptInstall(result.file)
+                            return@launch
+                        }
 
-                    is DownloadResult.Failed -> {
-                        failure = result.message
-                        if (mirror == selectedMirror) {
-                            status = "${result.message}，正在尝试其他源…"
+                        is DownloadResult.Failed -> {
+                            failure = result.message
+                            if (mirror == selectedMirror) {
+                                status = "${result.message}，正在尝试其他源…"
+                            }
                         }
                     }
                 }
+                downloading = false
+                progress = -1f
+                status = null
+                val message = failure ?: "所有下载源都失败了"
+                error = message
+                notifier.failed(message)
+            } finally {
+                // Also covers the activity being destroyed mid-download, which
+                // cancels the scope and would otherwise strand an ongoing
+                // notification that nothing is left to clear.
+                notifier.done()
             }
-            downloading = false
-            progress = -1f
-            status = null
-            error = failure ?: "所有下载源都失败了"
         }
     }
 
