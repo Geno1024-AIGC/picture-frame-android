@@ -55,10 +55,23 @@ when GitHub is slow or blocked: the update button in the top bar checks for a
 newer build and, if there is one, downloads the APK through a mirror and hands
 it to the system installer.
 
-Because `versionName` is static across canaries, freshness is decided by the
-workflow run number. CI passes `-PcanaryRunNumber` into the build so the APK
-knows what it is, and publishes a `canary.properties` manifest next to the APK
-carrying the run number, the size and the sha256.
+Because `versionName` is derived from the build rather than being a marketing
+version, freshness is decided by `versionCode`. CI passes
+`-PcanaryRunNumber` and `-PcanaryCommit` into the build, so the run number
+becomes the `versionCode` and `versionName` reads `128-a1b2c3d4`: the run
+number that orders the builds, then the short commit that identifies it. A
+`canary.properties` manifest is published next to the APK carrying the same run
+number, the size and the sha256.
+
+The updater compares that manifest against the installed package's own
+`versionCode`, read from the package manager. It could carry a constant in
+`BuildConfig` instead, but the installed package is the authority, and there is
+no second copy of the number that can drift out of step with the APK.
+
+A local build defaults to `1-local`, which is older than any canary and so
+always offers an update. It also cannot be installed over a canary, because
+Android refuses a downgrade: uninstall the canary first, or build with
+`-PcanaryRunNumber=999999` to sit above whatever CI has reached.
 
 The manifest is fetched from GitHub directly first, and is only a few hundred
 bytes so a slow link can still afford it. The mirrors act as a fallback for it
