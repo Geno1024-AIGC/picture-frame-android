@@ -35,6 +35,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -61,7 +62,7 @@ private val TABS = listOf("镜框", "背景", "画布", "导出")
 
 @Composable
 fun EditorScreen(viewModel: EditorViewModel = viewModel()) {
-    var tab by rememberSaveable { mutableStateOf(0) }
+    var tab by rememberSaveable { mutableIntStateOf(0) }
     var format by rememberSaveable { mutableStateOf(ExportFormat.Jpeg) }
     val snackbar = remember { SnackbarHostState() }
 

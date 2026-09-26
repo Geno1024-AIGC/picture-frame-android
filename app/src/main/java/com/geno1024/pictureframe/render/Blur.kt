@@ -7,6 +7,7 @@ import android.graphics.Rect
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.core.graphics.createBitmap
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -19,7 +20,7 @@ fun blurredBackdrop(photo: ImageBitmap, strength: Float): ImageBitmap {
     val w = (photo.width * scale).roundToInt().coerceAtLeast(2)
     val h = (photo.height * scale).roundToInt().coerceAtLeast(2)
 
-    val small = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+    val small = createBitmap(w, h)
     val canvas = AndroidCanvas(small)
     val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
     val scaleFit = max(w.toFloat() / photo.width, h.toFloat() / photo.height)
