@@ -6,6 +6,7 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -49,9 +50,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -64,10 +67,13 @@ import com.geno1024.pictureframe.EditorViewModel
 import com.geno1024.pictureframe.R
 import com.geno1024.pictureframe.io.ExportFormat
 import com.geno1024.pictureframe.io.LoadedPhoto
+import com.geno1024.pictureframe.model.Aspect
 import com.geno1024.pictureframe.model.EditorState
 import com.geno1024.pictureframe.model.Look
 import com.geno1024.pictureframe.model.Looks
 import com.geno1024.pictureframe.model.Resolution
+import com.geno1024.pictureframe.render.Layout
+import com.geno1024.pictureframe.render.drawFramed
 import com.geno1024.pictureframe.ui.components.PreviewCanvas
 import com.geno1024.pictureframe.ui.components.SegmentedTabs
 import com.geno1024.pictureframe.ui.update.UpdateDialog
@@ -189,7 +195,12 @@ fun EditorScreen(viewModel: EditorViewModel = viewModel()) {
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 if (photo != null) {
-                    LookStrip(onSelect = viewModel::applyLook)
+                    LookStrip(
+                        state = state,
+                        photo = photo,
+                        blurred = viewModel.blurred,
+                        onSelect = viewModel::applyLook,
+                    )
                     SegmentedTabs(TABS, tab) { tab = it }
                     Box(modifier = Modifier.heightIn(max = 320.dp)) {
                         Box(Modifier.verticalScroll(rememberScrollState())) {
@@ -392,23 +403,89 @@ private fun PickButton(onPick: () -> Unit) {
 }
 
 @Composable
-private fun LookStrip(onSelect: (Look) -> Unit) {
+private fun LookStrip(
+    state: EditorState,
+    photo: LoadedPhoto?,
+    blurred: ImageBitmap?,
+    onSelect: (Look) -> Unit,
+) {
+    // Only the looks actually on screen are composed, and a thumbnail reuses the
+    // blurred backdrop the stage already computed rather than blurring again.
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items(Looks.all) { look ->
-            Box(
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .clickable { onSelect(look) }
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
-            ) {
-                Text(
-                    text = look.name,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            LookItem(
+                look = look,
+                // Only these two fields of the live state are carried into a
+                // look, so passing them rather than the state keeps a thumbnail
+                // from being invalidated by every frame slider drag.
+                aspect = state.aspect,
+                resolution = state.resolution,
+                photo = photo?.image,
+                blurred = blurred,
+                photoAspect = photo?.aspect ?: 1f,
+                photoLongEdge = photo?.longEdge ?: 0,
+                onSelect = onSelect,
+            )
+        }
+    }
+}
+
+@Composable
+private fun LookItem(
+    look: Look,
+    aspect: Aspect,
+    resolution: Resolution,
+    photo: ImageBitmap?,
+    blurred: ImageBitmap?,
+    photoAspect: Float,
+    photoLongEdge: Int,
+    onSelect: (Look) -> Unit,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clip(RoundedCornerShape(10.dp))
+            .clickable { onSelect(look) }
+            .padding(4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Canvas(
+            modifier = Modifier
+                .size(58.dp)
+                .clip(RoundedCornerShape(6.dp))
+                // Looks with no background of their own would otherwise read as
+                // a hole in the row.
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            val preview = EditorState(
+                frame = look.frame,
+                background = look.background,
+                aspect = aspect,
+                resolution = resolution,
+                margin = look.margin,
+            )
+            val canvas = Layout.canvasSize(preview, photoAspect, photoLongEdge)
+            // Every thumbnail is the same square so the strip stays even; the
+            // look's own shape is fitted inside it.
+            val (fitWidth, fitHeight) = Layout.contain(
+                aspect = canvas.width / canvas.height,
+                maxWidth = size.width,
+                maxHeight = size.height,
+            )
+            val target = Size(fitWidth, fitHeight)
+            val stage = Layout.stage(preview, target, photoAspect)
+            withTransform({
+                translate((size.width - target.width) / 2f, (size.height - target.height) / 2f)
+            }) {
+                drawFramed(preview, stage, photo, blurred)
             }
         }
+        Text(
+            text = look.name,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+        )
     }
 }
 
