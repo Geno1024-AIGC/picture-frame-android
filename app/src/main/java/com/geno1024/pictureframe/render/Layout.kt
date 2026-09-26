@@ -45,7 +45,10 @@ object Layout {
 
     fun stage(state: EditorState, size: Size, photoAspect: Float): Stage {
         val unit = min(size.width, size.height)
-        val frameW = state.frame.width * unit
+        val frameW = when (state.frame.style) {
+            FrameStyle.None -> 0f
+            else -> state.frame.width * unit
+        }
         val matW = state.frame.matWidth * unit
         val margin = state.margin * unit
         val polaroid = state.frame.style == FrameStyle.Polaroid
