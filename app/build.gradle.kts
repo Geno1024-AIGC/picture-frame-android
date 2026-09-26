@@ -5,6 +5,11 @@ plugins {
 
 val appVersionName = "1.0"
 
+// CI passes -PcanaryRunNumber=<run_number> so the app can tell whether the
+// published canary is newer than itself. Local builds fall back to 0, which
+// compares as "older than everything" and simply offers an update.
+val canaryRunNumber = (project.findProperty("canaryRunNumber") as String?)?.toIntOrNull() ?: 0
+
 android {
     namespace = "com.geno1024.pictureframe"
     compileSdk = 37
@@ -15,6 +20,7 @@ android {
         targetSdk = 37
         versionCode = 1
         versionName = appVersionName
+        buildConfigField("int", "CANARY_RUN_NUMBER", "$canaryRunNumber")
     }
 
     buildTypes {
@@ -39,6 +45,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {
