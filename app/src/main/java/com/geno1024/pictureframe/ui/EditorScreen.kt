@@ -1,5 +1,8 @@
 package com.geno1024.pictureframe.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -12,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -49,9 +53,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.geno1024.pictureframe.EditorViewModel
 import com.geno1024.pictureframe.R
@@ -81,6 +88,15 @@ fun EditorScreen(viewModel: EditorViewModel = viewModel()) {
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
     ) { updateViewModel.grantInstallPermission() }
+
+    val context = LocalContext.current
+    val notificationPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) {
+        // Whether or not it was granted, the download itself carries on; the
+        // notification is a convenience, not a requirement.
+        updateViewModel.download()
+    }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) viewModel.open(uri)
@@ -117,7 +133,18 @@ fun EditorScreen(viewModel: EditorViewModel = viewModel()) {
             selectedMirrorPrefix = updateViewModel.selectedMirror.prefix,
             onSelectMirror = updateViewModel::selectMirror,
             onCheck = updateViewModel::check,
-            onDownload = updateViewModel::download,
+            onDownload = {
+                val granted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                    ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.POST_NOTIFICATIONS,
+                    ) == PackageManager.PERMISSION_GRANTED
+                if (granted) {
+                    updateViewModel.download()
+                } else {
+                    notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            },
             onGrantInstallPermission = {
                 permissionLauncher.launch(updateViewModel.settingsIntentForPermission())
             },
@@ -228,7 +255,10 @@ private fun TopBar(
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface)
             .statusBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+            // Pinned so that adding another action, or a large font scale making
+            // the title wrap, cannot change how tall the bar is.
+            .height(38.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -236,6 +266,8 @@ private fun TopBar(
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
         Spacer(Modifier.weight(1f))
         IconAction(
