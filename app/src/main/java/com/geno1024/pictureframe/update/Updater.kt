@@ -25,30 +25,65 @@ object Updater {
     private const val READ_TIMEOUT_MS = 30_000
 
     /**
-     * Fetches the canary manifest.
+     * Fetches the canary manifest, trying GitHub directly first and then the
+     * preset mirrors.
      *
-     * This always goes to GitHub directly on purpose. The manifest is a few
-     * hundred bytes, so even a slow link is fine, and reading the expected
-     * sha256 from a channel the user chose would defeat the point of verifying
-     * the download.
+     * Direct is preferred because the manifest carries the expected sha256, and
+     * it is small enough that even a slow link can afford it. The mirrors are
+     * only a fallback: if one serves the manifest, it also chooses the digest,
+     * so the sha256 check then only catches corruption and stale files rather
+     * than a hostile mirror. What actually prevents a mirror from installing
+     * its own APK is that Android refuses an update signed with a different
+     * key, so the worst case is a failed update, not a compromised install.
      */
-    suspend fun check(currentRunNumber: Int): UpdateResult = withContext(Dispatchers.IO) {
-        try {
-            val connection = open(CanaryManifest.DIRECT_URL)
-            if (connection.responseCode !in 200..299) {
-                return@withContext UpdateResult.Failed("检查更新失败：HTTP ${connection.responseCode}")
+    suspend fun check(currentRunNumber: Int, mirrors: List<Mirror>): UpdateResult =
+        withContext(Dispatchers.IO) {
+            val candidates = buildList {
+                add(Mirrors.DIRECT)
+                addAll(mirrors)
+            }.distinctBy { it.prefix }
+            var failure: String? = null
+            for (mirror in candidates) {
+                when (val text = fetchText(mirror.wrap(CanaryManifest.DIRECT_URL))) {
+                    is Fetch.Failed -> failure = text.message
+                    is Fetch.Ok -> {
+                        val info = CanaryManifest.parse(text.body)
+                            ?: return@withContext UpdateResult.Failed("无法解析更新信息")
+                        return@withContext if (info.runNumber <= currentRunNumber) {
+                            UpdateResult.UpToDate
+                        } else {
+                            UpdateResult.Available(info)
+                        }
+                    }
+                }
             }
-            val text = connection.inputStream.bufferedReader().use { it.readText() }
-            val info = CanaryManifest.parse(text)
-                ?: return@withContext UpdateResult.Failed("无法解析更新信息")
-            if (info.runNumber <= currentRunNumber) {
-                UpdateResult.UpToDate
-            } else {
-                UpdateResult.Available(info)
-            }
-        } catch (e: IOException) {
-            UpdateResult.Failed("检查更新失败：${e.message ?: "网络错误"}")
+            UpdateResult.Failed(failure ?: "检查更新失败")
         }
+
+    private sealed interface Fetch {
+        data class Ok(val body: String) : Fetch
+        data class Failed(val message: String) : Fetch
+    }
+
+    /**
+     * GitHub redirects asset downloads to a different host, and that redirect
+     * drops often enough to be worth retrying before giving up.
+     */
+    private fun fetchText(url: String, attempts: Int = 2): Fetch {
+        var last = "网络错误"
+        repeat(attempts) {
+            try {
+                val connection = open(url)
+                if (connection.responseCode !in 200..299) {
+                    last = "HTTP ${connection.responseCode}"
+                    return@repeat
+                }
+                return Fetch.Ok(connection.inputStream.bufferedReader().use { it.readText() })
+            } catch (e: IOException) {
+                last = e.message ?: "网络错误"
+            }
+        }
+        return Fetch.Failed(last)
     }
 
     /**

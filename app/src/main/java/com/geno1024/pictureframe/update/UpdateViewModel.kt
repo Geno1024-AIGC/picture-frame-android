@@ -74,7 +74,11 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
         error = null
         progress = -1f
         viewModelScope.launch {
-            when (val result = Updater.check(currentRun)) {
+            val mirrors = buildList {
+                add(selectedMirror)
+                addAll(Mirrors.PRESETS)
+            }.distinctBy { it.prefix }
+            when (val result = Updater.check(currentRun, mirrors)) {
                 is UpdateResult.UpToDate -> {
                     info = null
                     status = "已经是最新版本"
