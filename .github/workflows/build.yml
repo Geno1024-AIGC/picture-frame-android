@@ -40,11 +40,19 @@ jobs:
         run: ./gradlew lintDebug
 
       - name: Assemble debug APK
-        run: ./gradlew assembleDebug -PcanaryRunNumber=${{ github.run_number }}
+        run: |
+          ./gradlew assembleDebug \
+            -PcanaryRunNumber=${{ github.run_number }} \
+            -PcanaryCommit=${{ github.sha }}
 
       - name: Read version name
         id: version
-        run: echo "version_name=$(./gradlew -q printVersionName)" >> "$GITHUB_OUTPUT"
+        # The same properties the APK was built with. Without them this reports
+        # the local default and the release ends up titled as a different build.
+        run: |
+          echo "version_name=$(./gradlew -q printVersionName \
+            -PcanaryRunNumber=${{ github.run_number }} \
+            -PcanaryCommit=${{ github.sha }})" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -85,7 +93,7 @@ jobs:
           subject="$(git log -1 --pretty=%s)"
           notes="$(printf 'Build #%s, commit `%s`.\n\n%s\n\nDebug APK, not for distribution.' \
             "$RUN_NUMBER" "$short_sha" "$subject")"
-          title="$VERSION canary #$RUN_NUMBER"
+          title="$VERSION canary"
 
           # The in-app updater reads this manifest to learn the run number and the
           # expected digest. It is tiny, so the app always fetches it from GitHub
