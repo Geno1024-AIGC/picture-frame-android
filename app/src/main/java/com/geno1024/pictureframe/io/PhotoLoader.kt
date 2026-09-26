@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Build
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.annotation.RequiresApi
 import androidx.exifinterface.media.ExifInterface
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -41,6 +42,7 @@ suspend fun loadPhoto(context: Context, uri: Uri): LoadedPhoto? = withContext(Di
     }.getOrNull()
 }
 
+@RequiresApi(Build.VERSION_CODES.P)
 private fun decodeModern(context: Context, uri: Uri): Bitmap {
     val source = ImageDecoder.createSource(context.contentResolver, uri)
     return ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
