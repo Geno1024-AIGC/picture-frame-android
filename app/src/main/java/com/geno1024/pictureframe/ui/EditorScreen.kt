@@ -45,12 +45,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.geno1024.pictureframe.EditorViewModel
+import com.geno1024.pictureframe.R
 import com.geno1024.pictureframe.io.ExportFormat
 import com.geno1024.pictureframe.io.LoadedPhoto
 import com.geno1024.pictureframe.model.EditorState
@@ -59,6 +63,10 @@ import com.geno1024.pictureframe.model.Looks
 import com.geno1024.pictureframe.model.Resolution
 import com.geno1024.pictureframe.ui.components.PreviewCanvas
 import com.geno1024.pictureframe.ui.components.SegmentedTabs
+import com.geno1024.pictureframe.ui.update.UpdateDialog
+import com.geno1024.pictureframe.ui.update.UpdateUiState
+import com.geno1024.pictureframe.update.Mirrors
+import com.geno1024.pictureframe.update.UpdateViewModel
 
 private val TABS = listOf("镜框", "背景", "画布", "导出")
 
@@ -66,7 +74,13 @@ private val TABS = listOf("镜框", "背景", "画布", "导出")
 fun EditorScreen(viewModel: EditorViewModel = viewModel()) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var format by rememberSaveable { mutableStateOf(ExportFormat.Jpeg) }
+    var showUpdate by rememberSaveable { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
+    val updateViewModel: UpdateViewModel = viewModel()
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { updateViewModel.grantInstallPermission() }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) viewModel.open(uri)
@@ -84,10 +98,44 @@ fun EditorScreen(viewModel: EditorViewModel = viewModel()) {
         viewModel.consumeNotice()
     }
 
+    if (showUpdate) {
+        UpdateDialog(
+            currentRun = updateViewModel.currentRun,
+            availableRun = updateViewModel.info?.runNumber ?: 0,
+            infoLabel = updateViewModel.info?.let {
+                "${it.versionName} · ${it.sizeBytes / 1024} KB · sha256 ${it.shortSha}"
+            }.orEmpty(),
+            state = UpdateUiState(
+                checking = updateViewModel.checking,
+                downloading = updateViewModel.downloading,
+                progress = updateViewModel.progress,
+                status = updateViewModel.status,
+                error = updateViewModel.error,
+                needsInstallPermission = updateViewModel.needsInstallPermission,
+            ),
+            mirrorOptions = Mirrors.PRESETS.map { it.label to it.prefix },
+            selectedMirrorPrefix = updateViewModel.selectedMirror.prefix,
+            onSelectMirror = updateViewModel::selectMirror,
+            onCheck = updateViewModel::check,
+            onDownload = updateViewModel::download,
+            onGrantInstallPermission = {
+                permissionLauncher.launch(updateViewModel.settingsIntentForPermission())
+            },
+            onDismiss = { showUpdate = false },
+        )
+    }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbar) },
-        topBar = { TopBar(onReset = viewModel::reset, onPick = pick) },
+        topBar = {
+            TopBar(
+                onReset = viewModel::reset,
+                onPick = pick,
+                onUpdate = { showUpdate = true },
+                hasUpdate = updateViewModel.hasUpdate,
+            )
+        },
     ) { padding ->
         Column(
             modifier = Modifier
@@ -169,7 +217,12 @@ private fun Options(
 }
 
 @Composable
-private fun TopBar(onReset: () -> Unit, onPick: () -> Unit) {
+private fun TopBar(
+    onReset: () -> Unit,
+    onPick: () -> Unit,
+    onUpdate: () -> Unit,
+    hasUpdate: Boolean,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -185,6 +238,13 @@ private fun TopBar(onReset: () -> Unit, onPick: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurface,
         )
         Spacer(Modifier.weight(1f))
+        IconAction(
+            icon = painterResource(R.drawable.ic_update),
+            label = "检查更新",
+            onClick = onUpdate,
+            tint = if (hasUpdate) MaterialTheme.colorScheme.primary else null,
+        )
+        Spacer(Modifier.width(4.dp))
         IconAction(Icons.Filled.Add, "换一张照片", onPick)
         Spacer(Modifier.width(4.dp))
         IconAction(Icons.Filled.Refresh, "重置", onReset)
@@ -192,7 +252,12 @@ private fun TopBar(onReset: () -> Unit, onPick: () -> Unit) {
 }
 
 @Composable
-private fun IconAction(icon: ImageVector, label: String, onClick: () -> Unit) {
+private fun IconAction(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    tint: Color? = null,
+) {
     Box(
         modifier = Modifier
             .size(38.dp)
@@ -203,7 +268,30 @@ private fun IconAction(icon: ImageVector, label: String, onClick: () -> Unit) {
         Icon(
             imageVector = icon,
             contentDescription = label,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = tint ?: MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+@Composable
+private fun IconAction(
+    icon: Painter,
+    label: String,
+    onClick: () -> Unit,
+    tint: Color? = null,
+) {
+    Box(
+        modifier = Modifier
+            .size(38.dp)
+            .clip(CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            painter = icon,
+            contentDescription = label,
+            tint = tint ?: MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(20.dp),
         )
     }
