@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -18,6 +20,31 @@ val canaryRunNumber = (project.findProperty("canaryRunNumber") as String?)?.toIn
 val canaryCommit = ((project.findProperty("canaryCommit") as String?) ?: "local").take(8)
 val appVersionName = "$canaryRunNumber-$canaryCommit"
 
+// Release signing, shared across the geno1024-aigc org. The rules live in
+// RULES/KEYSTORE.md and the reading order here follows them: the environment
+// first, which is how CI injects it, then the git-ignored local.properties.
+// Nothing is hardcoded and nothing is committed.
+//
+// Every project signed by this key shares one identity, which is what lets the
+// updater install a new canary over the old one. A missing keystore leaves the
+// release build unsigned instead of failing configuration, so a local
+// assembleRelease still works; the workflow refuses to publish an unsigned APK.
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+
+fun keystoreSecret(property: String, env: String): String? =
+    System.getenv(env)?.takeIf { it.isNotBlank() }
+        ?: keystoreProperties.getProperty(property)?.takeIf { it.isNotBlank() }
+
+val releaseStoreFile = keystoreSecret("keystore.storeFile", "KEYSTORE_STORE_FILE")
+val releaseStorePassword = keystoreSecret("keystore.storePassword", "KEYSTORE_STORE_PASSWORD")
+val releaseKeyPassword =
+    keystoreSecret("keystore.keyPassword", "KEYSTORE_KEY_PASSWORD") ?: releaseStorePassword
+val releaseKeyAlias =
+    keystoreSecret("keystore.keyAlias", "KEYSTORE_KEY_ALIAS") ?: "geno"
+
 android {
     namespace = "com.geno1024.pictureframe"
     compileSdk = 37
@@ -30,6 +57,19 @@ android {
         versionName = appVersionName
     }
 
+    signingConfigs {
+        val storeFileValue = releaseStoreFile
+        val storePasswordValue = releaseStorePassword
+        if (storeFileValue != null && storePasswordValue != null) {
+            create("release") {
+                storeFile = File(storeFileValue)
+                storePassword = storePasswordValue
+                keyPassword = releaseKeyPassword
+                keyAlias = releaseKeyAlias
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -38,6 +78,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            // Left unset when there is no keystore, which yields an unsigned APK
+            // rather than a configuration failure.
+            signingConfigs.findByName("release")?.let { signingConfig = it }
         }
     }
 
