@@ -66,13 +66,21 @@ jobs:
             -PcanaryCommit=${{ github.sha }}
 
       - name: Verify the APK is signed
-        # The build is allowed to produce an unsigned APK locally, so assert here
-        # that CI did not silently do the same.
+        # An unsigned build is allowed to succeed locally, so assert here that CI
+        # did not silently produce one.
         run: |
           set -euo pipefail
+          apk=app/build/outputs/apk/release/app-release.apk
+          if [ ! -f "$apk" ]; then
+            echo "::error::$apk was not produced, so the release build is unsigned."
+            exit 1
+          fi
           apksigner="$(ls "$ANDROID_HOME"/build-tools/*/apksigner | tail -1)"
-          "$apksigner" verify --print-certs \
-            app/build/outputs/apk/release/app-release.apk | grep -E '^Signer #1 certificate (DN|SHA-256)'
+          # The exit status is the assertion: verify fails on an unsigned or
+          # otherwise unverifiable APK. The certificates are printed for the
+          # record only, and deliberately not parsed, because the wording varies
+          # between build-tools revisions.
+          "$apksigner" verify --print-certs "$apk"
 
       - name: Read version name
         id: version
