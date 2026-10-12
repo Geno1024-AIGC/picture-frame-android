@@ -55,13 +55,27 @@ when GitHub is slow or blocked: the update button in the top bar checks for a
 newer build and, if there is one, downloads the APK through a mirror and hands
 it to the system installer.
 
+The APK is a minified, **release-signed** build. Signing follows `RULES/KEYSTORE.md`
+(org-wide shared key): read from the environment first, then the git-ignored
+`local.properties`, with the alias defaulting to `geno`. Nothing is hardcoded and
+the keystore is never committed. A missing keystore leaves a local
+`assembleRelease` unsigned instead of failing, and CI refuses to publish in that
+case, since the platform would not install an unsigned APK over an existing one.
+
+Updates rely on that stability. Android will not install an update signed with a
+different key, so a canary signed with one key cannot update a canary signed with
+another. Moving from the debug-signed canaries published before #14 to the
+signed release ones therefore needs one manual uninstall and reinstall; after
+that the in-app updater works.
+
 Because `versionName` is derived from the build rather than being a marketing
 version, freshness is decided by `versionCode`. CI passes
 `-PcanaryRunNumber` and `-PcanaryCommit` into the build, so the run number
 becomes the `versionCode` and `versionName` reads `128-a1b2c3d4`: the run
 number that orders the builds, then the short commit that identifies it. A
 `canary.properties` manifest is published next to the APK carrying the same run
-number, the size and the sha256.
+number, the size, the sha256, and the asset name to fetch — the updater builds
+its download URL from that name rather than assuming a fixed file.
 
 The updater compares that manifest against the installed package's own
 `versionCode`, read from the package manager. It could carry a constant in
