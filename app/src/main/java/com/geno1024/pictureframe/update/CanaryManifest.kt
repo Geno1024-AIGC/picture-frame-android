@@ -22,6 +22,9 @@ object CanaryManifest {
 
     const val ASSET_NAME = "canary.properties"
 
+    /** Used when a manifest omits assetName or carries an unusable one. */
+    const val FALLBACK_ASSET_NAME = "app-release.apk"
+
     private val REPO = "Geno1024-AIGC/picture-frame-android"
     private val TAG = "canary"
 
@@ -29,10 +32,31 @@ object CanaryManifest {
     val DIRECT_URL: String =
         "https://github.com/$REPO/releases/download/$TAG/$ASSET_NAME"
 
-    val DIRECT_APK_URL: String =
-        "https://github.com/$REPO/releases/download/$TAG/app-debug.apk"
+    /**
+     * The asset to download. It comes from the manifest rather than being fixed
+     * here so that renaming what CI publishes does not silently leave the app
+     * fetching a stale or missing file.
+     */
+    fun apkUrl(assetName: String): String =
+        "https://github.com/$REPO/releases/download/$TAG/${safeAssetName(assetName)}"
 
-    fun apkUrl(): String = DIRECT_APK_URL
+    /**
+     * A release asset name is a single path segment. It is checked rather than
+     * trusted because a mirror can serve the manifest and the value is
+     * concatenated into a URL.
+     */
+    private fun safeAssetName(name: String): String {
+        val candidate = name.trim()
+        val ascii = candidate.all {
+            it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' ||
+                it == '.' || it == '_' || it == '-'
+        }
+        val valid = candidate.isNotEmpty() &&
+            candidate.length <= 128 &&
+            candidate.endsWith(".apk", ignoreCase = true) &&
+            ascii
+        return if (valid) candidate else FALLBACK_ASSET_NAME
+    }
 
     fun parse(text: String): CanaryInfo? {
         val values = HashMap<String, String>()
@@ -53,7 +77,7 @@ object CanaryManifest {
             versionName = values["versionName"].orEmpty().ifEmpty { "canary" },
             sizeBytes = size,
             sha256 = sha256,
-            assetName = values["assetName"].orEmpty().ifEmpty { "app-debug.apk" },
+            assetName = values["assetName"].orEmpty().ifEmpty { FALLBACK_ASSET_NAME },
         )
     }
 

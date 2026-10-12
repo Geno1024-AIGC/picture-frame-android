@@ -54,7 +54,7 @@ class CanaryManifestTest {
         assertEquals(3, info.runNumber)
         assertEquals("canary", info.versionName)
         assertEquals(0L, info.sizeBytes)
-        assertEquals("app-debug.apk", info.assetName)
+        assertEquals("app-release.apk", info.assetName)
     }
 
     @Test
@@ -83,7 +83,30 @@ class CanaryManifestTest {
     fun theManifestUrlPointsAtTheRollingCanaryTag() {
         assertTrue(CanaryManifest.DIRECT_URL.startsWith("https://github.com/"))
         assertTrue(CanaryManifest.DIRECT_URL.endsWith("/releases/download/canary/canary.properties"))
-        assertTrue(CanaryManifest.apkUrl().endsWith("/releases/download/canary/app-debug.apk"))
+    }
+
+    @Test
+    fun theAssetUrlFollowsTheManifest() {
+        assertTrue(
+            CanaryManifest.apkUrl("app-release.apk")
+                .endsWith("/releases/download/canary/app-release.apk"),
+        )
+        // A renamed asset must be honoured rather than silently ignored.
+        assertTrue(
+            CanaryManifest.apkUrl("app-v2.apk").endsWith("/releases/download/canary/app-v2.apk"),
+        )
+    }
+
+    @Test
+    fun anUnusableAssetNameFallsBack() {
+        // The name is concatenated into a URL and comes from whoever served the
+        // manifest, so anything but a plain file name is rejected.
+        for (bad in listOf("", "   ", "../../evil.apk", "sub/dir/app.apk", "app.apk?x=1", "app.zip")) {
+            assertTrue(
+                "expected a fallback for '$bad'",
+                CanaryManifest.apkUrl(bad).endsWith("/canary/${CanaryManifest.FALLBACK_ASSET_NAME}"),
+            )
+        }
     }
 }
 

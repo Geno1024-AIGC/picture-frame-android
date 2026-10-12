@@ -100,7 +100,7 @@ object Updater {
         onProgress: (Float) -> Unit = {},
     ): DownloadResult = withContext(Dispatchers.IO) {
         val target = File(cacheDir, "canary-${info.runNumber}.apk")
-        val url = mirror.wrap(CanaryManifest.apkUrl())
+        val url = mirror.wrap(CanaryManifest.apkUrl(info.assetName))
         try {
             val connection = open(url)
             if (connection.responseCode !in 200..299) {
